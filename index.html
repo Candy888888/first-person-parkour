@@ -1,0 +1,1226 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第一视角伪 3D 跑酷</title>
+    <style>
+      :root {
+        --ink: #f6fbff;
+        --muted: rgba(246, 251, 255, 0.72);
+        --panel: rgba(8, 13, 22, 0.68);
+        --panel-strong: rgba(8, 13, 22, 0.88);
+        --line: rgba(255, 255, 255, 0.16);
+        --amber: #ffcf5a;
+        --mint: #56e39f;
+        --coral: #ff647c;
+        --cyan: #54d7ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #070b12;
+        color: var(--ink);
+        font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      }
+
+      #app {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        min-height: 420px;
+        user-select: none;
+        touch-action: none;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .hud {
+        position: absolute;
+        inset: 16px 16px auto 16px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(86px, 1fr));
+        gap: 8px;
+        max-width: 620px;
+        pointer-events: none;
+      }
+
+      .stat {
+        min-height: 58px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 10px;
+        background: var(--panel);
+        box-shadow: 0 14px 42px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(12px);
+      }
+
+      .stat span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0;
+      }
+
+      .stat strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .meter {
+        grid-column: 1 / -1;
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .meter i {
+        display: block;
+        width: 0%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--mint), var(--amber), var(--coral));
+        transition: width 0.12s ease;
+      }
+
+      .badge {
+        position: absolute;
+        right: 16px;
+        top: 16px;
+        min-width: 138px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--panel);
+        color: var(--muted);
+        text-align: right;
+        backdrop-filter: blur(12px);
+        pointer-events: none;
+      }
+
+      .badge b {
+        display: block;
+        color: var(--ink);
+        font-size: 15px;
+        margin-bottom: 3px;
+      }
+
+      .center {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: radial-gradient(circle at 50% 35%, rgba(84, 215, 255, 0.12), rgba(7, 11, 18, 0.36) 42%, rgba(7, 11, 18, 0.68));
+      }
+
+      .center.hidden {
+        display: none;
+      }
+
+      .panel {
+        width: min(92vw, 420px);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        background: var(--panel-strong);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(14px);
+      }
+
+      .panel h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .panel p {
+        margin: 10px 0 18px;
+        color: var(--muted);
+        line-height: 1.65;
+        font-size: 14px;
+      }
+
+      .panel-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        min-height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        padding: 0 16px;
+        background: rgba(255, 255, 255, 0.12);
+        color: var(--ink);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button.primary {
+        border-color: rgba(255, 207, 90, 0.7);
+        background: linear-gradient(180deg, #ffe38d 0%, #ffb13d 100%);
+        color: #24140a;
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      .touch {
+        position: absolute;
+        inset: auto 16px 18px 16px;
+        display: none;
+        justify-content: space-between;
+        pointer-events: none;
+      }
+
+      .pad,
+      .actions {
+        display: grid;
+        gap: 10px;
+        pointer-events: auto;
+      }
+
+      .pad {
+        grid-template-columns: repeat(2, 56px);
+      }
+
+      .actions {
+        grid-template-columns: 64px;
+      }
+
+      .touch button {
+        width: 56px;
+        height: 56px;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 24px;
+        background: rgba(8, 13, 22, 0.62);
+        backdrop-filter: blur(12px);
+      }
+
+      .actions button {
+        width: 64px;
+        height: 64px;
+      }
+
+      .toast {
+        position: absolute;
+        left: 50%;
+        bottom: 106px;
+        transform: translateX(-50%) translateY(10px);
+        max-width: min(84vw, 520px);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 9px 14px;
+        background: rgba(8, 13, 22, 0.72);
+        color: var(--ink);
+        opacity: 0;
+        text-align: center;
+        font-size: 13px;
+        transition: opacity 0.18s ease, transform 0.18s ease;
+        pointer-events: none;
+        backdrop-filter: blur(10px);
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      @media (hover: none), (max-width: 760px) {
+        .touch {
+          display: flex;
+        }
+
+        .hud {
+          grid-template-columns: repeat(2, minmax(86px, 1fr));
+          max-width: calc(100vw - 132px);
+        }
+
+        .stat {
+          min-height: 52px;
+          padding: 8px 9px;
+        }
+
+        .stat strong {
+          font-size: 19px;
+        }
+
+        .badge {
+          min-width: 110px;
+          font-size: 12px;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .hud {
+          inset: 10px auto auto 10px;
+          width: calc(100vw - 118px);
+          gap: 6px;
+        }
+
+        .badge {
+          right: 10px;
+          top: 10px;
+          padding: 8px 9px;
+        }
+
+        .panel {
+          padding: 18px;
+        }
+
+        .panel h1 {
+          font-size: 29px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" aria-label="第一视角伪 3D 跑酷画面"></canvas>
+
+      <div class="hud" aria-live="polite">
+        <div class="stat"><span>距离</span><strong id="distance">0</strong></div>
+        <div class="stat"><span>分数</span><strong id="score">0</strong></div>
+        <div class="stat"><span>速度</span><strong id="speed">0</strong></div>
+        <div class="stat"><span>晶片</span><strong id="chips">0</strong></div>
+        <div class="meter"><i id="heat"></i></div>
+      </div>
+
+      <div class="badge">
+        <b id="runState">待机</b>
+        <span id="best">最佳 0</span>
+      </div>
+
+      <div class="center" id="overlay">
+        <div class="panel">
+          <h1 id="title">NEON DASH</h1>
+          <p id="subtitle">冲进悬浮城市的维护通道，贴着三条光轨穿过路障、低墙和扫描梁。</p>
+          <div class="panel-row">
+            <button class="primary" id="startBtn">开始</button>
+            <button id="muteBtn">声音 开</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="touch" aria-hidden="true">
+        <div class="pad">
+          <button data-act="left" title="左移">←</button>
+          <button data-act="right" title="右移">→</button>
+        </div>
+        <div class="actions">
+          <button data-act="jump" title="跳跃">↑</button>
+          <button data-act="slide" title="滑铲">↓</button>
+        </div>
+      </div>
+
+      <div class="toast" id="toast"></div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const distanceEl = document.getElementById("distance");
+      const scoreEl = document.getElementById("score");
+      const speedEl = document.getElementById("speed");
+      const chipsEl = document.getElementById("chips");
+      const heatEl = document.getElementById("heat");
+      const runStateEl = document.getElementById("runState");
+      const bestEl = document.getElementById("best");
+      const overlay = document.getElementById("overlay");
+      const titleEl = document.getElementById("title");
+      const subtitleEl = document.getElementById("subtitle");
+      const startBtn = document.getElementById("startBtn");
+      const muteBtn = document.getElementById("muteBtn");
+      const toastEl = document.getElementById("toast");
+
+      const roadWidth = 7.25;
+      const laneDividerOffset = roadWidth / 6;
+      const laneWidth = laneDividerOffset * 2;
+      const farZ = 82;
+      const nearZ = 0.6;
+      const gravity = 18;
+      const laneIds = [-1, 0, 1];
+      const keys = new Set();
+      const rand = (min, max) => min + Math.random() * (max - min);
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const randomLane = () => Math.floor(Math.random() * 3) - 1;
+      const laneCenter = (lane) => lane * laneWidth;
+      const laneDividers = [-laneDividerOffset, laneDividerOffset];
+      const roadSurfaceX = (x, z) => {
+        const path = trackPos(z);
+        return x - trackShift(z) + path.x * 0.01;
+      };
+      const safeStore = {
+        get(key) {
+          try {
+            return window.localStorage?.getItem(key) || "";
+          } catch {
+            return "";
+          }
+        },
+        set(key, value) {
+          try {
+            window.localStorage?.setItem(key, value);
+          } catch {
+            /* File previews can block storage; the game can still run. */
+          }
+        },
+      };
+
+      const palette = {
+        skyTop: "#162235",
+        skyMid: "#274862",
+        roadA: "#202830",
+        roadB: "#252f39",
+        shoulderA: "#6a233a",
+        shoulderB: "#223e54",
+        line: "#d8f6ff",
+      };
+
+      const state = {
+        mode: "menu",
+        width: 0,
+        height: 0,
+        dpr: 1,
+        time: 0,
+        distance: 0,
+        score: 0,
+        chips: 0,
+        best: Number(safeStore.get("neonDashBest") || 0),
+        speed: 20,
+        baseSpeed: 20,
+        heat: 0,
+        spawnTimer: 0,
+        pulseTimer: 0,
+        shake: 0,
+        muted: false,
+        messageTimer: 0,
+        cameraX: 0,
+        cameraY: 0,
+        cameraRoll: 0,
+        cameraShift: 0,
+        laneSwing: 0,
+        landingKick: 0,
+        slideLift: 0,
+        slidePulse: 0,
+      };
+
+      const player = {
+        lane: 0,
+        targetLane: 0,
+        x: 0,
+        y: 0,
+        vy: 0,
+        slide: 0,
+        shield: 0,
+        boost: 0,
+        slow: 0,
+        alive: true,
+      };
+
+      const world = {
+        objects: [],
+        particles: [],
+        stars: Array.from({ length: 80 }, () => ({
+          x: Math.random(),
+          y: Math.random() * 0.45,
+          r: rand(0.5, 1.8),
+          a: rand(0.18, 0.72),
+        })),
+        buildings: Array.from({ length: 44 }, (_, index) => ({
+          side: index % 2 ? 1 : -1,
+          offset: rand(8.5, 18),
+          z: rand(4, farZ),
+          w: rand(1.2, 3.2),
+          h: rand(2.2, 8.4),
+          hue: rand(175, 330),
+          windows: Math.floor(rand(2, 6)),
+        })),
+      };
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        state.dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        state.width = Math.floor(rect.width);
+        state.height = Math.floor(rect.height);
+        canvas.width = Math.floor(state.width * state.dpr);
+        canvas.height = Math.floor(state.height * state.dpr);
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      }
+
+      function project(x, z, y = 0) {
+        const h = state.height;
+        const w = state.width;
+        const horizon = h * 0.36;
+        const focal = Math.min(w, h) * 0.82;
+        const scale = focal / Math.max(nearZ, z + 2.4);
+        return {
+          x: w * 0.5 + x * scale,
+          y: horizon + (2.55 - y) * scale,
+          scale,
+        };
+      }
+
+      function trackShift(z) {
+        return 0;
+      }
+
+      function trackPos(z) {
+        return {
+          x: 0,
+          y: 0,
+        };
+      }
+
+      function resetRun() {
+        state.mode = "playing";
+        state.time = 0;
+        state.distance = 0;
+        state.score = 0;
+        state.chips = 0;
+        state.speed = state.baseSpeed;
+        state.heat = 0;
+        state.spawnTimer = 0.4;
+        state.pulseTimer = 0;
+        state.shake = 0;
+        state.cameraX = 0;
+        state.cameraY = 0;
+        state.cameraRoll = 0;
+        state.cameraShift = 0;
+        state.laneSwing = 0;
+        state.landingKick = 0;
+        state.slideLift = 0;
+        state.slidePulse = 0;
+        player.lane = 0;
+        player.targetLane = 0;
+        player.x = 0;
+        player.y = 0;
+        player.vy = 0;
+        player.slide = 0;
+        player.shield = 0;
+        player.boost = 0;
+        player.slow = 0;
+        player.alive = true;
+        world.objects.length = 0;
+        world.particles.length = 0;
+        overlay.classList.add("hidden");
+        toast("GO");
+        for (let i = 0; i < 7; i += 1) spawnObject(12 + i * 10);
+      }
+
+      function endRun(reason) {
+        if (state.mode !== "playing") return;
+        state.mode = "crashed";
+        player.alive = false;
+        state.shake = 18;
+        titleEl.textContent = "跑酷结束";
+        subtitleEl.textContent = reason;
+        startBtn.textContent = "再来一次";
+        overlay.classList.remove("hidden");
+        if (state.score > state.best) {
+          state.best = state.score;
+          safeStore.set("neonDashBest", String(state.best));
+          subtitleEl.textContent = `${reason} 新纪录 ${state.best}`;
+        }
+        blip(90, 0.18, "sawtooth");
+      }
+
+      function toast(text) {
+        toastEl.textContent = text;
+        toastEl.classList.add("show");
+        state.messageTimer = 1.1;
+      }
+
+      function moveLane(dir) {
+        if (state.mode === "menu" || state.mode === "crashed") return;
+        if (state.mode === "paused") {
+          togglePause(false);
+          return;
+        }
+        player.targetLane = clamp(player.targetLane + dir, -1, 1);
+      }
+
+      function jump() {
+        if (state.mode === "menu" || state.mode === "crashed") return;
+        if (state.mode === "paused") {
+          togglePause(false);
+          return;
+        }
+        if (player.y <= 0.01 && player.slide <= 0) {
+          player.vy = 6.8;
+          player.y = 0.03;
+          blip(360, 0.045, "triangle");
+        }
+      }
+
+      function slide() {
+        if (state.mode === "menu" || state.mode === "crashed") return;
+        if (state.mode === "paused") {
+          togglePause(false);
+          return;
+        }
+        if (player.y <= 0.02) {
+          player.slide = 0.62;
+          player.vy = 0;
+          player.y = 0;
+          state.slidePulse = 16;
+          state.slideLift = Math.max(state.slideLift, 28);
+          blip(160, 0.055, "square");
+        }
+      }
+
+      function togglePause(force) {
+        if (state.mode === "menu" || state.mode === "crashed") return;
+        state.mode = force === false || state.mode === "paused" ? "playing" : "paused";
+        titleEl.textContent = "暂停";
+        subtitleEl.textContent = "城市还在发光，轨道已经等好。";
+        startBtn.textContent = "继续";
+        overlay.classList.toggle("hidden", state.mode !== "paused");
+      }
+
+      function spawnObject(preferredZ) {
+        const z = preferredZ ?? farZ + rand(4, 12);
+        const roll = Math.random();
+        const lane = randomLane();
+        let type = "barrier";
+        if (roll < 0.28) type = "chip";
+        else if (roll < 0.45) type = "low";
+        else if (roll < 0.62) type = "high";
+        else if (roll < 0.76) type = "barrier";
+        else if (roll < 0.88) type = "slow";
+        else if (roll < 0.95) type = "shield";
+        else type = "boost";
+
+        if (type === "chip") {
+          const leadLane = randomLane();
+          for (let i = 0; i < 5; i += 1) {
+            world.objects.push({
+              type: "chip",
+              lane: leadLane,
+              x: laneCenter(leadLane),
+              z: z + i * 1.65,
+              passed: false,
+              spin: rand(0, Math.PI * 2),
+            });
+          }
+          return;
+        }
+
+        world.objects.push({
+          type,
+          lane,
+          x: laneCenter(lane),
+          z,
+          passed: false,
+          spin: rand(0, Math.PI * 2),
+        });
+      }
+
+      function update(dt) {
+        const playable = state.mode === "playing";
+        state.time += dt;
+        if (state.messageTimer > 0) {
+          state.messageTimer -= dt;
+          if (state.messageTimer <= 0) toastEl.classList.remove("show");
+        }
+        if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 28);
+        if (!playable) return;
+
+        if (keys.has("arrowleft") || keys.has("a")) moveLane(-1), keys.delete("arrowleft"), keys.delete("a");
+        if (keys.has("arrowright") || keys.has("d")) moveLane(1), keys.delete("arrowright"), keys.delete("d");
+        if (keys.has("arrowup") || keys.has("w") || keys.has(" ")) jump(), keys.delete("arrowup"), keys.delete("w"), keys.delete(" ");
+        if (keys.has("arrowdown") || keys.has("s")) slide(), keys.delete("arrowdown"), keys.delete("s");
+
+        player.lane = lerp(player.lane, player.targetLane, Math.min(1, dt * 16));
+        player.x = laneCenter(player.lane);
+        player.slide = Math.max(0, player.slide - dt);
+        player.shield = Math.max(0, player.shield - dt);
+        player.boost = Math.max(0, player.boost - dt);
+        player.slow = Math.max(0, player.slow - dt);
+        const wasAirborne = player.y > 0.02;
+        player.vy -= gravity * dt;
+        player.y = Math.max(0, player.y + player.vy * dt);
+        if (player.y === 0 && player.vy < 0) {
+          if (wasAirborne) state.landingKick = 14;
+          player.vy = 0;
+        }
+        state.landingKick = Math.max(0, state.landingKick - dt * 95);
+        const targetSlideLift = player.slide > 0 ? 46 : 0;
+        state.slideLift = lerp(state.slideLift, targetSlideLift, Math.min(1, dt * 8));
+        state.slidePulse = Math.max(0, state.slidePulse - dt * 35);
+        state.cameraX = lerp(state.cameraX, player.x * 1.14, Math.min(1, dt * 16));
+        state.cameraShift = lerp(state.cameraShift, 0, Math.min(1, dt * 15));
+        state.cameraRoll = lerp(state.cameraRoll, 0, Math.min(1, dt * 10));
+        const laneSwingTarget = clamp((player.targetLane - player.lane) * 1.18 + player.targetLane * 0.1, -1, 1);
+        state.laneSwing = lerp(state.laneSwing, laneSwingTarget, Math.min(1, dt * 13));
+        const jumpLift = clamp(player.y * 190 + player.vy * 2.4 + state.landingKick - state.slideLift, 0, 200);
+        state.cameraY = lerp(state.cameraY, jumpLift, Math.min(1, dt * 8));
+
+        state.heat = clamp(state.heat + dt * 1.4, 0, 100);
+        const baseRunSpeed = state.baseSpeed + state.distance * 0.012;
+        const speedBoost = player.boost > 0 ? 8 : 0;
+        const speedPenalty = player.slow > 0 ? 8 : 0;
+        state.speed = Math.max(10, baseRunSpeed + speedBoost - speedPenalty);
+        state.distance += state.speed * dt;
+        state.score = Math.floor(state.distance * 2 + state.chips * 75);
+        state.spawnTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          spawnObject();
+          state.spawnTimer = clamp(1.1 - state.speed * 0.018, 0.42, 1.0);
+        }
+
+        for (const object of world.objects) {
+          object.z -= state.speed * dt;
+          object.spin += dt * 4.2;
+          if (!object.passed && object.z < 0.85) resolveObject(object);
+        }
+        compactLiveList(world.objects, (object) => object.z > -4 && !object.remove);
+
+        for (const particle of world.particles) {
+          particle.life -= dt;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.z += particle.vz * dt;
+        }
+        compactLiveList(world.particles, (particle) => particle.life > 0);
+
+        for (const building of world.buildings) {
+          building.z -= state.speed * dt * 0.35;
+          if (building.z < 1) {
+            building.z += farZ;
+            building.h = rand(2.2, 8.4);
+            building.offset = rand(8.5, 18);
+            building.hue = rand(175, 330);
+          }
+        }
+
+      }
+
+      function compactLiveList(list, keep) {
+        let write = 0;
+        for (let read = 0; read < list.length; read += 1) {
+          if (keep(list[read])) {
+            list[write] = list[read];
+            write += 1;
+          }
+        }
+        list.length = write;
+      }
+
+      function resolveObject(object) {
+        object.passed = true;
+        const playerRegion = player.targetLane;
+        const sameLaneRegion = playerRegion === object.lane;
+
+        if (object.type === "chip") {
+          if (!sameLaneRegion) return;
+          state.chips += 1;
+          object.remove = true;
+          burst(object.x, 0.65, object.z, "#ffcf5a", 8);
+          blip(620, 0.035, "sine");
+          return;
+        }
+
+        if (object.type === "shield") {
+          if (!sameLaneRegion) return;
+          player.shield = 5.5;
+          object.remove = true;
+          burst(object.x, 0.85, object.z, "#56e39f", 16);
+          toast("护盾");
+          blip(520, 0.09, "triangle");
+          return;
+        }
+
+        if (object.type === "boost") {
+          if (!sameLaneRegion) return;
+          player.boost = 3.2;
+          object.remove = true;
+          burst(object.x, 0.72, object.z, "#54d7ff", 18);
+          toast("加速");
+          blip(740, 0.08, "sine");
+          return;
+        }
+
+        if (object.type === "slow") {
+          if (!sameLaneRegion) return;
+          player.slow = 2.4;
+          object.remove = true;
+          burst(object.x, 0.25, object.z, "#ffcf5a", 14);
+          toast("减速带");
+          blip(120, 0.08, "square");
+          return;
+        }
+
+        if (object.type === "low") {
+          const clearedLow = player.y > 0.72 || !sameLaneRegion;
+          if (clearedLow) {
+            burst(object.x, 0.5, object.z, "#ffffff", 10);
+            state.heat = Math.max(0, state.heat - 6);
+            return;
+          }
+        }
+
+        if (object.type === "high") {
+          const clearedHigh = player.slide > 0 || !sameLaneRegion;
+          if (clearedHigh) {
+            burst(object.x, 0.5, object.z, "#ffffff", 10);
+            state.heat = Math.max(0, state.heat - 6);
+            return;
+          }
+        }
+
+        if (!sameLaneRegion) return;
+
+        if (player.shield > 0) {
+          player.shield = 0;
+          object.remove = true;
+          state.shake = 10;
+          burst(object.x, 0.8, object.z, "#56e39f", 24);
+          toast("护盾破裂");
+          return;
+        }
+
+        endRun("撞上了轨道障碍。");
+      }
+
+      function burst(x, y, z, color, amount) {
+        for (let i = 0; i < amount; i += 1) {
+          world.particles.push({
+            x,
+            y,
+            z,
+            vx: rand(-3, 3),
+            vy: rand(-0.2, 4),
+            vz: rand(-4, 3),
+            size: rand(0.03, 0.09),
+            color,
+            life: rand(0.35, 0.72),
+          });
+        }
+      }
+
+      function draw() {
+        const w = state.width;
+        const h = state.height;
+        ctx.save();
+        if (state.shake > 0) ctx.translate(rand(-state.shake, state.shake), rand(-state.shake, state.shake));
+        ctx.translate(0, state.cameraY * 1.5 - state.slideLift * 0.9 - state.slidePulse * 0.62);
+        ctx.translate(state.laneSwing * 28, 0);
+        drawSky(w, h);
+        drawBuildings();
+        drawRoad();
+        drawObjects();
+        drawParticles();
+        drawCockpit();
+        if (state.mode === "paused") drawPauseTint(w, h);
+        ctx.restore();
+        updateHud();
+      }
+
+      function drawSky(w, h) {
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, palette.skyTop);
+        sky.addColorStop(0.42, palette.skyMid);
+        sky.addColorStop(0.72, "#131821");
+        sky.addColorStop(1, "#080b11");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        for (const star of world.stars) {
+          ctx.globalAlpha = star.a + Math.sin(state.time * 1.7 + star.x * 10) * 0.12;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(star.x * w, star.y * h, star.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        const horizon = h * 0.36;
+        const glow = ctx.createRadialGradient(w * 0.5, horizon, 20, w * 0.5, horizon, Math.max(w, h) * 0.45);
+        glow.addColorStop(0, "rgba(255, 207, 90, 0.42)");
+        glow.addColorStop(0.28, "rgba(84, 215, 255, 0.16)");
+        glow.addColorStop(1, "rgba(84, 215, 255, 0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 7; i += 1) {
+          const y = horizon + i * 17;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+      }
+
+      function drawBuildings() {
+        const sorted = [...world.buildings].sort((a, b) => b.z - a.z);
+        for (const building of sorted) {
+          const x = building.side * building.offset;
+          const foot = project(x, building.z, 0);
+          const top = project(x, building.z, building.h);
+          const width = building.w * foot.scale;
+          const height = foot.y - top.y;
+          ctx.fillStyle = `hsla(${building.hue}, 44%, ${building.side > 0 ? 31 : 24}%, 0.78)`;
+          ctx.fillRect(foot.x - width * 0.5, top.y, width, height);
+          ctx.fillStyle = "rgba(255, 223, 120, 0.58)";
+          const cols = Math.max(1, Math.floor(width / 14));
+          const rows = Math.max(1, building.windows);
+          for (let c = 0; c < cols; c += 1) {
+            for (let r = 0; r < rows; r += 1) {
+              if ((c + r + Math.floor(building.z)) % 3 === 0) continue;
+              ctx.fillRect(foot.x - width * 0.36 + c * 13, top.y + 14 + r * 18, 5, 9);
+            }
+          }
+        }
+      }
+
+      function drawRoad() {
+        for (let z = farZ; z > nearZ; z -= 2) {
+          const z2 = z - 2;
+          const path = trackPos(z);
+          const leftFar = project(roadSurfaceX(-roadWidth * 0.5, z), z, path.y * 0.01);
+          const rightFar = project(roadSurfaceX(roadWidth * 0.5, z), z, path.y * 0.01);
+          const leftNear = project(roadSurfaceX(-roadWidth * 0.5, z2), z2, path.y * 0.01);
+          const rightNear = project(roadSurfaceX(roadWidth * 0.5, z2), z2, path.y * 0.01);
+          const band = Math.floor((z + state.distance * 0.06) / 4) % 2;
+          ctx.fillStyle = band ? palette.roadA : palette.roadB;
+          quad(leftFar, rightFar, rightNear, leftNear);
+
+          ctx.fillStyle = band ? palette.shoulderA : palette.shoulderB;
+          const shoulderL1 = project(roadSurfaceX(-roadWidth * 0.72, z), z, path.y * 0.01);
+          const shoulderL2 = project(roadSurfaceX(-roadWidth * 0.72, z2), z2, path.y * 0.01);
+          const shoulderR1 = project(roadSurfaceX(roadWidth * 0.72, z), z, path.y * 0.01);
+          const shoulderR2 = project(roadSurfaceX(roadWidth * 0.72, z2), z2, path.y * 0.01);
+          quad(shoulderL1, leftFar, leftNear, shoulderL2);
+          quad(rightFar, shoulderR1, shoulderR2, rightNear);
+
+          if (z % 4 === 0) {
+            ctx.fillStyle = "rgba(216, 246, 255, 0.48)";
+            for (const lineX of laneDividers) {
+              const a = project(roadSurfaceX(lineX - 0.02, z), z, 0.02 + path.y * 0.01);
+              const b = project(roadSurfaceX(lineX + 0.02, z), z, 0.02 + path.y * 0.01);
+              const c = project(roadSurfaceX(lineX + 0.02, z2), z2, 0.02 + path.y * 0.01);
+              const d = project(roadSurfaceX(lineX - 0.02, z2), z2, 0.02 + path.y * 0.01);
+              quad(a, b, c, d);
+            }
+          }
+        }
+
+        ctx.strokeStyle = "rgba(84, 215, 255, 0.85)";
+        ctx.lineWidth = 2;
+        for (const edge of [-roadWidth * 0.72, roadWidth * 0.72]) {
+          ctx.beginPath();
+          for (let z = farZ; z > nearZ; z -= 2) {
+            const p = project(roadSurfaceX(edge, z), z, 0.05);
+            if (z === farZ) ctx.moveTo(p.x, p.y);
+            else ctx.lineTo(p.x, p.y);
+          }
+          ctx.stroke();
+        }
+      }
+
+      function quad(a, b, c, d) {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.lineTo(d.x, d.y);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawObjects() {
+        const sorted = [...world.objects].sort((a, b) => b.z - a.z);
+        for (const object of sorted) {
+          if (object.z < nearZ || object.z > farZ) continue;
+          if (object.type === "chip") drawChip(object);
+          else if (object.type === "low") drawLowWall(object);
+          else if (object.type === "high") drawLaser(object);
+          else if (object.type === "shield") drawPickup(object, "#56e39f", "◇");
+          else if (object.type === "boost") drawPickup(object, "#54d7ff", "»");
+          else if (object.type === "slow") drawSpeedBump(object);
+          else drawBarrier(object);
+        }
+      }
+
+      function drawSpeedBump(object) {
+        const path = trackPos(object.z);
+        const z = object.z;
+        const x = object.x;
+        const p1 = project(roadSurfaceX(x - 0.8, z), z, 0.08 + path.y * 0.01);
+        const p2 = project(roadSurfaceX(x + 0.8, z), z, 0.08 + path.y * 0.01);
+        const p3 = project(roadSurfaceX(x + 0.8, z - 1.1), z - 1.1, 0.08 + path.y * 0.01);
+        const p4 = project(roadSurfaceX(x - 0.8, z - 1.1), z - 1.1, 0.08 + path.y * 0.01);
+        ctx.fillStyle = "rgba(255, 207, 90, 0.96)";
+        quad(p1, p2, p3, p4);
+        ctx.strokeStyle = "rgba(37, 24, 10, 0.55)";
+        ctx.lineWidth = Math.max(2, p1.scale * 0.025);
+        for (let i = -1; i <= 1; i += 1) {
+          const a = project(roadSurfaceX(x + i * 0.38 - 0.04, z), z, 0.1 + path.y * 0.01);
+          const b = project(roadSurfaceX(x + i * 0.38 + 0.18, z - 1.1), z - 1.1, 0.1 + path.y * 0.01);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+
+      function drawBarrier(object) {
+        const path = trackPos(object.z);
+        const p = project(roadSurfaceX(object.x, object.z), object.z, 0.85 + path.y * 0.01);
+        const s = p.scale;
+        const w = 1.18 * s;
+        const h = 1.35 * s;
+        ctx.fillStyle = "rgba(255, 100, 124, 0.94)";
+        ctx.fillRect(p.x - w * 0.5, p.y - h * 0.5, w, h);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+        ctx.lineWidth = Math.max(2, s * 0.035);
+        ctx.strokeRect(p.x - w * 0.5, p.y - h * 0.5, w, h);
+        ctx.fillStyle = "rgba(36, 20, 10, 0.42)";
+        for (let i = -1; i <= 1; i += 1) {
+          ctx.fillRect(p.x - w * 0.42, p.y + i * h * 0.18, w * 0.84, h * 0.08);
+        }
+      }
+
+      function drawLowWall(object) {
+        const path = trackPos(object.z);
+        const p = project(roadSurfaceX(object.x, object.z), object.z, 0.38 + path.y * 0.01);
+        const s = p.scale;
+        const w = 1.45 * s;
+        const h = 0.74 * s;
+        ctx.fillStyle = "rgba(255, 207, 90, 0.94)";
+        ctx.fillRect(p.x - w * 0.5, p.y - h * 0.5, w, h);
+        ctx.fillStyle = "rgba(17, 24, 39, 0.28)";
+        for (let i = 0; i < 4; i += 1) {
+          ctx.fillRect(p.x - w * 0.45 + i * w * 0.26, p.y - h * 0.5, w * 0.08, h);
+        }
+      }
+
+      function drawLaser(object) {
+        const path = trackPos(object.z);
+        const p = project(roadSurfaceX(object.x, object.z), object.z, 1.38 + path.y * 0.01);
+        const s = p.scale;
+        const w = 1.65 * s;
+        const h = 0.28 * s;
+        ctx.shadowColor = "#ff647c";
+        ctx.shadowBlur = Math.max(10, s * 0.08);
+        ctx.fillStyle = "rgba(255, 100, 124, 0.88)";
+        ctx.fillRect(p.x - w * 0.5, p.y - h * 0.5, w, h);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(255,255,255,0.78)";
+        ctx.fillRect(p.x - w * 0.48, p.y - 1, w * 0.96, 2);
+      }
+
+      function drawChip(object) {
+        const path = trackPos(object.z);
+        const p = project(roadSurfaceX(object.x, object.z), object.z, 0.72 + Math.sin(object.spin) * 0.08 + path.y * 0.01);
+        const s = p.scale;
+        const r = Math.max(4, 0.18 * s);
+        const squash = Math.abs(Math.cos(object.spin)) * 0.72 + 0.22;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.scale(squash, 1);
+        ctx.fillStyle = "#ffcf5a";
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.lineWidth = Math.max(1, r * 0.16);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawPickup(object, color, mark) {
+        const path = trackPos(object.z);
+        const p = project(roadSurfaceX(object.x, object.z), object.z, 0.8 + Math.sin(object.spin * 1.5) * 0.12 + path.y * 0.01);
+        const s = p.scale;
+        const r = Math.max(9, 0.24 * s);
+        ctx.shadowColor = color;
+        ctx.shadowBlur = Math.max(12, 0.12 * s);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#071016";
+        ctx.font = `${Math.max(13, r * 1.35)}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(mark, p.x, p.y - 1);
+      }
+
+      function drawParticles() {
+        for (const particle of world.particles) {
+          const p = project(particle.x, particle.z, particle.y);
+          ctx.globalAlpha = clamp(particle.life * 2.2, 0, 1);
+          ctx.fillStyle = particle.color;
+          ctx.fillRect(p.x, p.y, Math.max(2, p.scale * particle.size), Math.max(2, p.scale * particle.size));
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawCockpit() {
+        const w = state.width;
+        const h = state.height;
+        const crouching = player.slide > 0;
+        const bodyY = h * (crouching ? 0.825 : 0.94) + Math.sin(state.time * 12) * (player.y > 0 ? 1 : 3) + state.cameraY * 0.08 - state.slideLift * 0.24 - state.slidePulse * 0.22;
+        const cockpitPoint = project(laneCenter(player.lane) * 1.18, 0.82, 0.25);
+        const center = clamp(cockpitPoint.x + state.laneSwing * 24, w * 0.12, w * 0.88);
+        ctx.fillStyle = "rgba(5, 8, 14, 0.72)";
+        ctx.beginPath();
+        ctx.moveTo(center - (crouching ? w * 0.16 : w * 0.18), h);
+        ctx.lineTo(center - (crouching ? w * 0.07 : w * 0.09), bodyY);
+        ctx.lineTo(center + (crouching ? w * 0.07 : w * 0.09), bodyY);
+        ctx.lineTo(center + (crouching ? w * 0.16 : w * 0.18), h);
+        ctx.closePath();
+        ctx.fill();
+
+        if (player.shield > 0) {
+          ctx.strokeStyle = "rgba(86, 227, 159, 0.9)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.ellipse(center, h * 0.78, w * 0.16, h * 0.2, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        if (player.boost > 0) {
+          const boost = ctx.createLinearGradient(0, h * 0.55, 0, h);
+          boost.addColorStop(0, "rgba(84,215,255,0)");
+          boost.addColorStop(1, "rgba(84,215,255,0.24)");
+          ctx.fillStyle = boost;
+          ctx.fillRect(0, h * 0.55, w, h * 0.45);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawPauseTint(w, h) {
+        ctx.fillStyle = "rgba(7, 11, 18, 0.34)";
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      function updateHud() {
+        distanceEl.textContent = Math.floor(state.distance);
+        scoreEl.textContent = state.score;
+        speedEl.textContent = Math.round(state.speed);
+        chipsEl.textContent = state.chips;
+        heatEl.style.width = `${clamp(state.heat, 0, 100)}%`;
+        bestEl.textContent = `最佳 ${state.best}`;
+        if (state.mode === "playing") {
+          if (player.shield > 0) runStateEl.textContent = "护盾";
+          else if (player.boost > 0) runStateEl.textContent = "加速";
+          else if (player.slow > 0) runStateEl.textContent = "减速";
+          else if (player.slide > 0) runStateEl.textContent = "滑行";
+          else if (player.y > 0.1) runStateEl.textContent = "腾空";
+          else if (Math.abs(state.laneSwing) > 0.15) runStateEl.textContent = "换轨";
+          else runStateEl.textContent = "冲刺";
+        } else if (state.mode === "paused") {
+          runStateEl.textContent = "暂停";
+        } else if (state.mode === "crashed") {
+          runStateEl.textContent = "结束";
+        } else {
+          runStateEl.textContent = "待机";
+        }
+      }
+
+      let audioCtx;
+      function blip(freq, duration, type) {
+        if (state.muted) return;
+        try {
+          audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = type;
+          osc.frequency.value = freq;
+          gain.gain.value = 0.035;
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + duration);
+        } catch {
+          state.muted = true;
+          muteBtn.textContent = "声音 关";
+        }
+      }
+
+      let last = performance.now();
+      function frame(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("resize", resizeCanvas);
+      window.addEventListener("keydown", (event) => {
+        const key = event.key.toLowerCase();
+        if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s"].includes(key)) {
+          event.preventDefault();
+          keys.add(key);
+        }
+        if (key === "p") togglePause();
+        if (key === "r" && state.mode === "crashed") resetRun();
+        if (key === "enter" && state.mode !== "playing") {
+          state.mode === "paused" ? togglePause(false) : resetRun();
+        }
+      });
+
+      function startOrResume() {
+        if (state.mode === "paused") togglePause(false);
+        else resetRun();
+      }
+
+      startBtn.addEventListener("click", startOrResume);
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startOrResume();
+      });
+
+      muteBtn.addEventListener("click", () => {
+        state.muted = !state.muted;
+        muteBtn.textContent = state.muted ? "声音 关" : "声音 开";
+      });
+
+      document.querySelectorAll("[data-act]").forEach((button) => {
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          const action = button.dataset.act;
+          if (action === "left") moveLane(-1);
+          if (action === "right") moveLane(1);
+          if (action === "jump") jump();
+          if (action === "slide") slide();
+        });
+      });
+
+      resizeCanvas();
+      updateHud();
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>
